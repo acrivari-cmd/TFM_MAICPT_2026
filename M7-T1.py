@@ -123,29 +123,28 @@ else:
         type=["jpg", "jpeg", "png", "pdf"],
         key=f"uploader_{st.session_state.uploader_key}"
     )
-    # ATENÇÃO: Lembre-se de ajustar este caminho do seu Poppler no seu PC
-    CAMINHO_POPPLER = r'D:\PERFIL\Área de Trabalho\CODE\POPPLER\Release-26.02.0-0\poppler-26.02.0\Library\bin'
     
-    if uploaded_file is not None and st.session_state.analysis_results is None:
-        image = None
-        if uploaded_file.type == "application/pdf":
-    try:
-        with st.spinner("Convertendo PDF para imagem de alta resolução..."):
-            file_bytes = uploaded_file.getvalue()
+ if uploaded_file is not None and st.session_state.analysis_results is None:
+    image = None
 
-            images = convert_from_bytes(file_bytes, dpi=300)
+    if uploaded_file.type == "application/pdf":
+        try:
+            with st.spinner("Convertendo PDF para imagem de alta resolução..."):
+                file_bytes = uploaded_file.getvalue()
+                images = convert_from_bytes(file_bytes, dpi=300)
 
-            if images:
-                image = images[0]
-                st.success("PDF convertido com sucesso!")
+                if images:
+                    image = images[0]
+                    st.success("PDF convertido com sucesso!")
 
-    except Exception as e:
-        st.error(f"Erro ao processar PDF: {e}")
-        else:
-            image = Image.open(uploaded_file)
+        except Exception as e:
+            st.error(f"Erro ao processar PDF: {e}")
 
-        if image is not None:
-            st.image(image, caption="Projeto Carregado", use_column_width=True)
+    else:
+        image = Image.open(uploaded_file)
+
+    if image is not None:
+        st.image(image, caption="Projeto Carregado", use_column_width=True)
 
             if st.button(":rocket: Executar Análise com IA", type="primary"):
                 with st.spinner("a IA está auditando os requisitos técnicos..."):
