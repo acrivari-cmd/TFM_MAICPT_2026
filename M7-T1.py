@@ -215,10 +215,10 @@ if st.session_state.analysis_results is not None:
         status_atual = res.get("status", "Não avaliado")
 
         cor_status = (
-            ":large_green_circle:" if status_atual == "Atendido"
-            else ":large_yellow_circle:" if "parcialmente" in status_atual.lower()
-            else ":white_circle:" if "não aplicável" in status_atual.lower()
-            else ":red_circle:"
+            "🟢" if status_atual == "Atendido"
+            else "🟡" if "parcialmente" in status_atual.lower()
+            else "⚪" if "não aplicável" in status_atual.lower()
+            else "🔴"
         )
 
         with st.expander(f"{res.get('id')}. {res.get('item')} - {cor_status} {status_atual}"):
