@@ -124,7 +124,7 @@ else:
         key=f"uploader_{st.session_state.uploader_key}"
     )
     
- if uploaded_file is not None and st.session_state.analysis_results is None:
+if uploaded_file is not None and st.session_state.analysis_results is None:
     image = None
 
     if uploaded_file.type == "application/pdf":
@@ -146,7 +146,9 @@ else:
     if image is not None:
         st.image(image, caption="Projeto Carregado", use_column_width=True)
 
-            if st.button(":rocket: Executar Análise com IA", type="primary"):
+        if st.button(":rocket: Executar Análise com IA", type="primary"):
+            with st.spinner("A IA está auditando os requisitos técnicos..."):
+                try:
                 with st.spinner("a IA está auditando os requisitos técnicos..."):
                     try:
                         data = load_requirements()
