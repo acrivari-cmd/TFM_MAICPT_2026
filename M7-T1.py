@@ -147,22 +147,25 @@ if uploaded_file is not None and st.session_state.analysis_results is None:
         st.image(image, caption="Projeto Carregado", use_column_width=True)
 
         if st.button(":rocket: Executar Análise com IA", type="primary"):
-            with st.spinner("A IA está auditando os requisitos técnicos..."):
-                try:
-                with st.spinner("a IA está auditando os requisitos técnicos..."):
-                    try:
-                        data = load_requirements()
-                        if data:
-                            contexto_normativo = json.dumps(data['requisitos'], ensure_ascii=False)
-
-                            # Configurando o modelo com a temperatura escolhida no Slider
-                            model = genai.GenerativeModel(
-                                model_name=model_choice,
-                                generation_config={
-                                    "response_mime_type": "application/json",
-                                    "temperature": temp_input
-                                }
-                            )
+            try:
+                with st.spinner("A IA está auditando os requisitos técnicos..."):
+        
+                    data = load_requirements()
+        
+                    if data:
+                        contexto_normativo = json.dumps(
+                            data['requisitos'],
+                            ensure_ascii=False
+                        )
+        
+                        # Configurando o modelo com a temperatura escolhida no Slider
+                        model = genai.GenerativeModel(
+                            model_name=model_choice,
+                            generation_config={
+                                "response_mime_type": "application/json",
+                                "temperature": temp_input
+                            }
+                        )
 
                             prompt = f"""
                             Você é um auditor especialista em normas de desenho técnico (NBR 6492).
