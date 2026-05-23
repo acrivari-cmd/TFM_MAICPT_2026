@@ -1,0 +1,106 @@
+{
+  "requisitos": [
+    {
+      "id": 1,
+      "item": "Pátios e Sentidos",
+      "criterios": "Adicionar os sentidos e os nomes dos pátios mais próximos ao pátio de projeto.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 2,
+      "item": "Simbologias PA e CA",
+      "criterios": "Indicar corretamente as simbologias e textos referentes ao Ponto de Agulha (PA) e Centro de Agulha (CA).",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 3,
+      "item": "Indicação CA = PI nos AMVs",
+      "criterios": "Verificar se consta, tanto na implantação quanto no perfil, a indicação 'CA = PI' nos Aparelhos de Mudança de Via (AMVs).",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 4,
+      "item": "Marco de Entrevia",
+      "criterios": "Indicar marco na metade da entrevia mínima de projeto (confirmar valor com o projetista).",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 5,
+      "item": "Malha de Coordenadas",
+      "criterios": "A malha deve estar na cor 8 por padrão. Se houver imagem de fundo, a malha deve obrigatoriamente estar na cor branca (True Color 255,255,255).",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 6,
+      "item": "Padrão de Folha",
+      "criterios": "Verificar se o selo/folha utilizado segue o padrão Stafe ou o padrão específico do cliente.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 7,
+      "item": "Estações Colaterais",
+      "criterios": "Indicar claramente as estações colaterais no projeto.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 8,
+      "item": "Bloco de Norte",
+      "criterios": "O bloco de orientação do norte deve ser inserido em todas as vistas da implantação, utilizando obrigatoriamente o bloco do arquivo 'PADRÃO ANOTATIVO'.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 9,
+      "item": "Drenagem e Fluxo",
+      "criterios": "Adicionar setas de fluxo nos dispositivos de drenagem. Linhas de chamada para canaletas/valetas devem indicar a declividade (i=x,xx%).",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 10,
+      "item": "Pontos Altos e Baixos",
+      "criterios": "Verificar se todos os pontos altos e baixos do projeto estão devidamente indicados.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 11,
+      "item": "Unidades de Medida",
+      "criterios": "Verificar se as unidades estão escritas como 'km' ou 'm' (minúsculo), e não como 'KM'.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 12,
+      "item": "Divisão de Folhas",
+      "criterios": "Verificar se as linhas de divisão de folhas estão visíveis e corretas em suas respectivas pranchas.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 13,
+      "item": "Escala e Tipo de Vista",
+      "criterios": "A indicação da escala e tipo de vista deve estar no lado superior esquerdo da prancha e preenchida corretamente.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 14,
+      "item": "Início e Fim do Perfil",
+      "criterios": "No Perfil, escrever 'INICIO' e 'FIM' na frente das informações de alinhamento em letras brancas.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 15,
+      "item": "Transição de Trilhos",
+      "criterios": "Inserir e indicar com linha de chamada a transição de trilhos onde for necessário.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 16,
+      "item": "Sobreposição de Textos",
+      "criterios": "Verificar textos em geral, garantindo que não haja textos encavalados ou ilegíveis.",
+      "status_esperado": "Obrigatório"
+    },
+    {
+      "id": 17,
+      "item": "Caixas de Passagem",
+      "criterios": "Na versão completa, devem estar indicadas as cotas C.T (Cota de Tampa) e C.F (Cota de Fundo) das caixas de passagem.",
+      "status_esperado": "Obrigatório"
+    }
+  ]
+}
