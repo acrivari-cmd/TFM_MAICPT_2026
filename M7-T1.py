@@ -129,15 +129,18 @@ else:
     if uploaded_file is not None and st.session_state.analysis_results is None:
         image = None
         if uploaded_file.type == "application/pdf":
-            try:
-                with st.spinner("Convertendo PDF para imagem de alta resolução..."):
-                    file_bytes = uploaded_file.getvalue()
-                    images = convert_from_bytes(file_bytes, dpi=300, poppler_path=CAMINHO_POPPLER)
-                    if images:
-                        image = images[0]
-                        st.success("PDF convertido com sucesso!")
-            except Exception as e:
-                st.error(f"Erro ao processar PDF. Verifique o caminho do Poppler: {e}")
+    try:
+        with st.spinner("Convertendo PDF para imagem de alta resolução..."):
+            file_bytes = uploaded_file.getvalue()
+
+            images = convert_from_bytes(file_bytes, dpi=300)
+
+            if images:
+                image = images[0]
+                st.success("PDF convertido com sucesso!")
+
+    except Exception as e:
+        st.error(f"Erro ao processar PDF: {e}")
         else:
             image = Image.open(uploaded_file)
 
