@@ -30,7 +30,7 @@ class PDFReport(FPDF):
         self.set_font("Arial", "B", 14)
         self.cell(0, 10, "Análise Avançada de Projetos", 0, 1, "C")
         self.set_font("Arial", "", 10)
-        self.cell(0, 10, "Baseado nos criterios da NBR 6492", 0, 1, "C")
+        self.cell(0, 10, "Baseado nos criterios da NBR e Manuais Internos", 0, 1, "C")
         self.ln(5)
 
 
@@ -74,7 +74,7 @@ st.markdown(
 )
 
 st.title("Análise Avançada de Projetos")
-st.write("Auditoria inteligente baseada nos critérios técnicos da NBR 6492.")
+st.write("Auditoria inteligente baseada nos critérios técnicos da NBR e Manuais Internos.")
 
 
 with st.sidebar:
