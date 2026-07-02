@@ -18,16 +18,19 @@ load_dotenv()
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 OPENROUTER_APP_TITLE = "ZIGURAT-M7-T1"
+DEFAULT_MODEL_A = "openai/gpt-5-mini"
+DEFAULT_MODEL_B = "google/gemini-2.5-flash"
+DEFAULT_MODEL_C = "anthropic/claude-haiku-4.5"
 FALLBACK_VISION_MODELS = [
+    DEFAULT_MODEL_A,
+    DEFAULT_MODEL_B,
     "openai/gpt-4.1-mini",
-    "meta-llama/llama-4-maverick",
-    "mistralai/mistral-small-3.1-24b-instruct",
-    "google/gemma-3-27b-it",
+    "google/gemini-2.5-flash-lite",
 ]
 FALLBACK_TEXT_MODELS = [
+    DEFAULT_MODEL_C,
     "openai/gpt-4.1-nano",
-    "deepseek/deepseek-chat-v3-0324",
-    "qwen/qwen3-14b",
+    "anthropic/claude-3.5-haiku",
 ]
 
 
@@ -38,19 +41,19 @@ def ler_timeout_padrao():
         return 90
 
 
-DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", FALLBACK_VISION_MODELS[0])
-DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", FALLBACK_VISION_MODELS[1])
-DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", FALLBACK_TEXT_MODELS[0])
+DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", DEFAULT_MODEL_A)
+DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", DEFAULT_MODEL_B)
+DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", DEFAULT_MODEL_C)
 DEFAULT_TIMEOUT = ler_timeout_padrao()
 FALLBACK_OPENROUTER_MODELS = list(
     dict.fromkeys(FALLBACK_VISION_MODELS + FALLBACK_TEXT_MODELS)
 )
 
 STATUS_VALIDOS = [
-    "Atendido",
-    "Parcialmente Atendido",
-    "Não Atendido",
-    "Não Aplicável",
+    "Conforme",
+    "Parcialmente Conforme",
+    "Não Conforme",
+    "Não Verificável pela Imagem",
 ]
 STATUS_REVISAO_HUMANA = "Revisão Humana Necessária"
 
@@ -71,6 +74,67 @@ class OpenRouterError(Exception):
 
 def get_openrouter_api_key():
     return os.getenv("OPENROUTER_API_KEY", "").strip()
+
+
+def carregar_json_enviado(uploaded_json):
+    if uploaded_json is None:
+        return None, None, "Envie um arquivo JSON normativo antes de executar a análise."
+
+    if not uploaded_json.name.lower().endswith(".json"):
+        return None, None, "O arquivo normativo deve estar no formato .json."
+
+    try:
+        data = json.loads(uploaded_json.getvalue().decode("utf-8"))
+    except UnicodeDecodeError:
+        return None, None, "Não foi possível ler o JSON em UTF-8."
+    except json.JSONDecodeError as exc:
+        return None, None, f"JSON normativo inválido: {exc.msg}."
+
+    if data in ({}, [], None):
+        return None, None, "O JSON normativo está vazio."
+
+    requisitos = extrair_requisitos_normativos(data)
+    if not requisitos:
+        return (
+            data,
+            None,
+            "Estrutura mínima incompatível: envie uma lista de requisitos ou um objeto com a chave 'requisitos'.",
+        )
+
+    return data, requisitos, None
+
+
+def extrair_requisitos_normativos(data):
+    if isinstance(data, list):
+        requisitos = data
+    elif isinstance(data, dict) and isinstance(data.get("requisitos"), list):
+        requisitos = data["requisitos"]
+    else:
+        return None
+
+    requisitos_validos = [item for item in requisitos if isinstance(item, dict)]
+    return requisitos_validos or None
+
+
+def obter_id_requisito(requisito, indice):
+    return requisito.get("id") or requisito.get("codigo") or requisito.get("código") or indice
+
+
+def obter_nome_requisito(requisito, indice):
+    for chave in ("item", "nome", "titulo", "título", "requisito", "descricao", "descrição"):
+        valor = requisito.get(chave)
+        if valor:
+            return str(valor)
+    return f"Requisito {indice}"
+
+
+def exibir_previa_json(requisitos):
+    st.success(f"JSON normativo carregado com sucesso: {len(requisitos)} requisitos encontrados.")
+    with st.expander("Prévia resumida do JSON normativo"):
+        for indice, requisito in enumerate(requisitos[:5], start=1):
+            st.write(f"{obter_id_requisito(requisito, indice)}. {obter_nome_requisito(requisito, indice)}")
+        if len(requisitos) > 5:
+            st.caption(f"... mais {len(requisitos) - 5} requisito(s).")
 
 
 def modelo_parece_aceitar_imagem(modelo):
@@ -144,15 +208,6 @@ def selecionar_modelo(
     )
 
 
-def load_requirements():
-    try:
-        with open("requisitos_normativos.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        st.error("Arquivo requisitos_normativos.json não encontrado.")
-        return None
-
-
 def remover_acentos(texto):
     texto = str(texto or "")
     return "".join(
@@ -168,13 +223,13 @@ def normalizar_status(status):
     if "revisao humana" in status_limpo:
         return STATUS_REVISAO_HUMANA
     if "parcial" in status_limpo:
-        return "Parcialmente Atendido"
-    if "nao aplicavel" in status_limpo or "não aplicável" in str(status).lower():
-        return "Não Aplicável"
-    if "nao atendido" in status_limpo:
-        return "Não Atendido"
-    if status_limpo == "atendido" or " atendido" in status_limpo:
-        return "Atendido"
+        return "Parcialmente Conforme"
+    if "nao verificavel" in status_limpo or "não verificável" in str(status).lower():
+        return "Não Verificável pela Imagem"
+    if "nao conforme" in status_limpo:
+        return "Não Conforme"
+    if status_limpo == "conforme" or " conforme" in status_limpo:
+        return "Conforme"
 
     return "Não avaliado"
 
@@ -294,71 +349,93 @@ def chamar_openrouter(modelo, mensagens, api_key, temperature=0.1, timeout=DEFAU
     return extrair_texto_openrouter(data)
 
 
-def criar_prompt_analise(requisitos):
-    contexto_normativo = json.dumps(requisitos, ensure_ascii=False)
+def criar_prompt_analise(contexto_normativo):
     return f"""
-Você é um auditor especialista em normas de desenho técnico, incluindo a NBR 6492.
+Você é um auditor técnico especializado em análise de documentos, desenhos e projetos técnicos.
 
-Analise a imagem do projeto técnico anexa e verifique os seguintes requisitos:
+Sua tarefa é avaliar a imagem do documento/projeto enviada, utilizando exclusivamente os requisitos normativos fornecidos no contexto abaixo.
+
+Contexto normativo carregado pelo usuário:
 {contexto_normativo}
 
+Instruções de auditoria:
+
+1. Analise a imagem com olhar técnico, crítico e criterioso.
+2. Verifique cada requisito normativo informado no contexto.
+3. Não assuma informações que não estejam visíveis na imagem.
+4. Não invente conformidades ou não conformidades.
+5. Quando um requisito não puder ser verificado visualmente, classifique como "não verificável pela imagem".
+6. Quando houver evidência parcial, classifique como "parcialmente conforme".
+7. Para cada requisito, informe identificação ou nome do requisito, status, justificativa técnica objetiva, evidência observada e recomendação quando aplicável.
+8. Ao final, apresente um resumo geral da auditoria com os principais riscos técnicos encontrados.
+
 RETORNE APENAS UM OBJETO JSON VÁLIDO. NÃO INCLUA NENHUM TEXTO FORA DO JSON.
+Não cite normas específicas que não estejam presentes no contexto normativo carregado.
+Não utilize conhecimento externo para complementar requisitos ausentes.
 
 Formato obrigatório:
 {{
   "resultados": [
     {{
       "id": 1,
-      "item": "Nome do Item",
-      "status": "Atendido",
-      "justificativa": "Sua justificativa técnica aqui."
+      "requisito": "Nome ou identificação do requisito",
+      "status": "conforme",
+      "justificativa": "Justificativa técnica curta.",
+      "evidencia": "Evidência observada na imagem, quando existir.",
+      "recomendacao": "Recomendação de correção, quando aplicável."
     }}
-  ]
+  ],
+  "resumo_geral": "Resumo objetivo da auditoria."
 }}
 
 Use apenas um destes status:
-- Atendido
-- Parcialmente Atendido
-- Não Atendido
-- Não Aplicável
+- conforme
+- não conforme
+- parcialmente conforme
+- não verificável pela imagem
 """
 
 
-def criar_prompt_arbitro(requisito, resposta_modelo_1, resposta_modelo_2):
-    requisito_json = json.dumps(requisito, ensure_ascii=False)
-    resposta_1_json = json.dumps(resposta_modelo_1, ensure_ascii=False)
-    resposta_2_json = json.dumps(resposta_modelo_2, ensure_ascii=False)
-
+def criar_prompt_arbitro(contexto_normativo, resposta_modelo_1, resposta_modelo_2):
     return f"""
-Você é um árbitro técnico. NÃO reanalise o PDF, a imagem ou o projeto completo.
-Use apenas o requisito, as respostas e as justificativas abaixo.
+Você é um auditor técnico sênior atuando como juiz de consistência entre duas auditorias independentes.
 
-Requisito analisado:
-{requisito_json}
+A imagem do projeto/documento foi analisada por dois modelos diferentes.
 
-Resposta do Modelo 1:
-{resposta_1_json}
+Contexto normativo utilizado:
+{contexto_normativo}
 
-Resposta do Modelo 2:
-{resposta_2_json}
+Resposta do Modelo A:
+{json.dumps(resposta_modelo_1, ensure_ascii=False)}
 
-Decida qual justificativa é mais consistente com o requisito.
-Se nenhuma justificativa for suficiente, indique incerteza de forma clara.
+Resposta do Modelo B:
+{json.dumps(resposta_modelo_2, ensure_ascii=False)}
+
+Sua tarefa:
+
+1. Compare as respostas do Modelo A e do Modelo B.
+2. Identifique divergências de status, justificativa ou interpretação técnica.
+3. Escolha a resposta mais bem fundamentada para cada requisito divergente.
+4. Não faça uma nova auditoria completa do zero.
+5. Use apenas o contexto normativo e as justificativas apresentadas pelos modelos A e B.
+6. Se nenhuma das duas respostas for tecnicamente suficiente, indique que a decisão é inconclusiva.
+7. Justifique de forma objetiva por que uma resposta foi escolhida.
 
 RETORNE APENAS UM OBJETO JSON VÁLIDO. NÃO INCLUA NENHUM TEXTO FORA DO JSON.
 
 Formato obrigatório:
 {{
-  "decisao": "Modelo 1",
-  "status_final": "Atendido",
-  "justificativa_escolhida": "Justificativa selecionada.",
-  "justificativa_arbitro": "Explique por que esta justificativa é mais consistente."
+  "decisao": "Modelo A",
+  "status_final": "conforme",
+  "justificativa_escolhida": "Justificativa selecionada ou consolidada.",
+  "justificativa_arbitro": "Por que esta resposta foi escolhida.",
+  "resumo_divergencia": "Resumo objetivo da divergência."
 }}
 
 Valores aceitos para "decisao":
-- Modelo 1
-- Modelo 2
-- Incerteza
+- Modelo A
+- Modelo B
+- inconclusivo
 """
 
 
@@ -374,36 +451,45 @@ def normalizar_lista_resultados(resposta_json, requisitos):
         raise ValueError("A resposta não contém a lista 'resultados'.")
 
     resultados_por_id = {}
+    resultados_por_nome = {}
     for item in itens:
         if not isinstance(item, dict):
             continue
-        try:
-            item_id = int(item.get("id"))
-        except (TypeError, ValueError):
-            continue
-        resultados_por_id[item_id] = item
+        item_id = str(item.get("id") or "").strip()
+        item_nome = str(item.get("requisito") or item.get("item") or "").strip().lower()
+        if item_id:
+            resultados_por_id[item_id] = item
+        if item_nome:
+            resultados_por_nome[item_nome] = item
 
     resultados_normalizados = []
-    for requisito in requisitos:
-        item_id = int(requisito.get("id"))
-        resposta_item = resultados_por_id.get(item_id, {})
+    for indice, requisito in enumerate(requisitos, start=1):
+        item_id = obter_id_requisito(requisito, indice)
+        item_nome = obter_nome_requisito(requisito, indice)
+        resposta_item = (
+            resultados_por_id.get(str(item_id))
+            or resultados_por_nome.get(item_nome.lower())
+            or {}
+        )
         resultados_normalizados.append(
             {
                 "id": item_id,
-                "item": resposta_item.get("item") or requisito.get("item", ""),
+                "item": resposta_item.get("requisito") or resposta_item.get("item") or item_nome,
                 "status": normalizar_status(resposta_item.get("status")),
                 "justificativa": str(
                     resposta_item.get("justificativa")
                     or "Modelo não retornou justificativa para este requisito."
                 ).strip(),
+                "evidencia": str(resposta_item.get("evidencia") or resposta_item.get("evidência") or "").strip(),
+                "recomendacao": str(resposta_item.get("recomendacao") or resposta_item.get("recomendação") or "").strip(),
             }
         )
 
     return resultados_normalizados
 
 
-def analisar_documento_com_modelo(modelo, requisitos, image_data_url, api_key, temperature):
-    prompt = criar_prompt_analise(requisitos)
+def analisar_documento_com_modelo(modelo, contexto_normativo, requisitos, image_data_url, api_key, temperature):
+    prompt = criar_prompt_analise(contexto_normativo)
     mensagens = [
         {
             "role": "user",
@@ -431,8 +517,8 @@ def respostas_validas_para_comparacao(resposta_modelo_1, resposta_modelo_2):
     )
 
 
-def chamar_modelo_arbitro(modelo, requisito, resposta_modelo_1, resposta_modelo_2, api_key):
-    prompt = criar_prompt_arbitro(requisito, resposta_modelo_1, resposta_modelo_2)
+def chamar_modelo_arbitro(modelo, contexto_normativo, resposta_modelo_1, resposta_modelo_2, api_key):
+    prompt = criar_prompt_arbitro(contexto_normativo, resposta_modelo_1, resposta_modelo_2)
     mensagens = [{"role": "user", "content": prompt}]
     texto_resposta = chamar_openrouter(modelo, mensagens, api_key, temperature=0.0)
     resposta_json = carregar_json_da_resposta(texto_resposta)
@@ -441,12 +527,12 @@ def chamar_modelo_arbitro(modelo, requisito, resposta_modelo_1, resposta_modelo_
         raise ValueError("A resposta do árbitro não contém um objeto JSON.")
 
     decisao = str(resposta_json.get("decisao", "")).strip().lower()
-    if "modelo 1" in decisao or decisao == "1":
-        decisao_normalizada = "Modelo 1"
-    elif "modelo 2" in decisao or decisao == "2":
-        decisao_normalizada = "Modelo 2"
+    if "modelo a" in decisao or decisao == "a":
+        decisao_normalizada = "Modelo A"
+    elif "modelo b" in decisao or decisao == "b":
+        decisao_normalizada = "Modelo B"
     else:
-        decisao_normalizada = "Incerteza"
+        decisao_normalizada = "Inconclusivo"
 
     return {
         "decisao": decisao_normalizada,
@@ -462,8 +548,8 @@ def chamar_modelo_arbitro(modelo, requisito, resposta_modelo_1, resposta_modelo_
 
 def consolidar_revisao_humana_sem_arbitro(requisito, resposta_modelo_1, resposta_modelo_2):
     return {
-        "id": requisito.get("id"),
-        "item": requisito.get("item"),
+        "id": resposta_modelo_1.get("id") or resposta_modelo_2.get("id") or requisito.get("id"),
+        "item": resposta_modelo_1.get("item") or resposta_modelo_2.get("item") or requisito.get("item"),
         "modelo_1": resposta_modelo_1,
         "modelo_2": resposta_modelo_2,
         "status_comparacao": "revisão humana necessária",
@@ -485,8 +571,8 @@ def consolidar_por_concordancia(requisito, resposta_modelo_1, resposta_modelo_2)
         or "Concordância entre os modelos sem justificativa detalhada."
     )
     return {
-        "id": requisito.get("id"),
-        "item": requisito.get("item"),
+        "id": resposta_modelo_1.get("id") or resposta_modelo_2.get("id") or requisito.get("id"),
+        "item": resposta_modelo_1.get("item") or resposta_modelo_2.get("item") or requisito.get("item"),
         "modelo_1": resposta_modelo_1,
         "modelo_2": resposta_modelo_2,
         "status_comparacao": "concordância",
@@ -495,7 +581,7 @@ def consolidar_por_concordancia(requisito, resposta_modelo_1, resposta_modelo_2)
         "justificativa_escolhida_modelo_3": "",
         "status": resposta_modelo_1.get("status"),
         "justificativa": (
-            "Concordância entre Modelo 1 e Modelo 2. "
+            "Concordância entre Modelo A e Modelo B. "
             f"Justificativa de referência: {justificativa_final}"
         ),
     }
@@ -508,36 +594,36 @@ def consolidar_por_arbitro(
     decisao_arbitro,
 ):
     decisao = decisao_arbitro.get("decisao")
-    if decisao == "Modelo 1":
+    if decisao == "Modelo A":
         resposta_escolhida = resposta_modelo_1
-    elif decisao == "Modelo 2":
+    elif decisao == "Modelo B":
         resposta_escolhida = resposta_modelo_2
     else:
         return {
-            "id": requisito.get("id"),
-            "item": requisito.get("item"),
+            "id": resposta_modelo_1.get("id") or resposta_modelo_2.get("id") or requisito.get("id"),
+            "item": resposta_modelo_1.get("item") or resposta_modelo_2.get("item") or requisito.get("item"),
             "modelo_1": resposta_modelo_1,
             "modelo_2": resposta_modelo_2,
             "status_comparacao": "revisão humana necessária",
-            "decisao_modelo_3": "Incerteza",
+            "decisao_modelo_3": "Inconclusivo",
             "justificativa_modelo_3": decisao_arbitro.get("justificativa_arbitro", ""),
             "justificativa_escolhida_modelo_3": "",
             "status": STATUS_REVISAO_HUMANA,
             "justificativa": (
                 decisao_arbitro.get("justificativa_arbitro")
-                or "O Modelo 3 indicou que nenhuma justificativa é suficiente."
+                or "O Modelo C indicou que nenhuma justificativa é suficiente."
             ),
         }
 
     justificativa_escolhida = (
         decisao_arbitro.get("justificativa_escolhida")
         or resposta_escolhida.get("justificativa")
-        or "Justificativa escolhida pelo Modelo 3 não informada."
+        or "Justificativa escolhida pelo Modelo C não informada."
     )
 
     return {
-        "id": requisito.get("id"),
-        "item": requisito.get("item"),
+        "id": resposta_modelo_1.get("id") or resposta_modelo_2.get("id") or requisito.get("id"),
+        "item": resposta_modelo_1.get("item") or resposta_modelo_2.get("item") or requisito.get("item"),
         "modelo_1": resposta_modelo_1,
         "modelo_2": resposta_modelo_2,
         "status_comparacao": "divergência",
@@ -551,6 +637,7 @@ def consolidar_por_arbitro(
 
 def consolidar_resultados(
     requisitos,
+    contexto_normativo,
     resultados_modelo_1,
     resultados_modelo_2,
     modelo_arbitro,
@@ -578,7 +665,7 @@ def consolidar_resultados(
         try:
             decisao_arbitro = chamar_modelo_arbitro(
                 modelo_arbitro,
-                requisito,
+                contexto_normativo,
                 resposta_1,
                 resposta_2,
                 api_key,
@@ -589,8 +676,8 @@ def consolidar_resultados(
         except (OpenRouterError, ValueError) as exc:
             consolidados.append(
                 {
-                    "id": requisito.get("id"),
-                    "item": requisito.get("item"),
+                    "id": resposta_1.get("id") or resposta_2.get("id") or requisito.get("id"),
+                    "item": resposta_1.get("item") or resposta_2.get("item") or requisito.get("item"),
                     "modelo_1": resposta_1,
                     "modelo_2": resposta_2,
                     "status_comparacao": "revisão humana necessária",
@@ -610,6 +697,7 @@ def consolidar_resultados(
 
 def executar_fluxo_validacao(
     image,
+    contexto_normativo,
     requisitos,
     api_key,
     modelo_1,
@@ -620,6 +708,7 @@ def executar_fluxo_validacao(
     image_data_url = preparar_imagem_para_api(image)
     resultados_modelo_1 = analisar_documento_com_modelo(
         modelo_1,
+        contexto_normativo,
         requisitos,
         image_data_url,
         api_key,
@@ -627,6 +716,7 @@ def executar_fluxo_validacao(
     )
     resultados_modelo_2 = analisar_documento_com_modelo(
         modelo_2,
+        contexto_normativo,
         requisitos,
         image_data_url,
         api_key,
@@ -635,6 +725,7 @@ def executar_fluxo_validacao(
 
     return consolidar_resultados(
         requisitos,
+        contexto_normativo,
         resultados_modelo_1,
         resultados_modelo_2,
         modelo_3,
@@ -647,7 +738,7 @@ class PDFReport(FPDF):
         self.set_font("Arial", "B", 14)
         self.cell(0, 10, "Análise Avançada de Projetos", 0, 1, "C")
         self.set_font("Arial", "", 10)
-        self.cell(0, 10, "Baseado nos criterios da NBR e Manuais Internos", 0, 1, "C")
+        self.cell(0, 10, "Baseado no JSON normativo carregado pelo usuário", 0, 1, "C")
         self.ln(5)
 
 
@@ -697,11 +788,11 @@ def nova_analise():
 
 def cor_status(status_atual):
     status_normalizado = normalizar_status(status_atual)
-    if status_normalizado == "Atendido":
+    if status_normalizado == "Conforme":
         return "🟢"
-    if status_normalizado == "Parcialmente Atendido":
+    if status_normalizado == "Parcialmente Conforme":
         return "🟡"
-    if status_normalizado == "Não Aplicável":
+    if status_normalizado == "Não Verificável pela Imagem":
         return "⚪"
     if status_normalizado == STATUS_REVISAO_HUMANA:
         return "🟠"
@@ -712,19 +803,23 @@ def exibir_resposta_modelo(titulo, resposta):
     st.markdown(f"**{titulo}**")
     st.write(f"Resultado: {resposta.get('status', 'Não avaliado')}")
     st.write(resposta.get("justificativa", "Sem justificativa."))
+    if resposta.get("evidencia"):
+        st.write(f"Evidência: {resposta.get('evidencia')}")
+    if resposta.get("recomendacao"):
+        st.write(f"Recomendação: {resposta.get('recomendacao')}")
 
 
 def exibir_resultado(res):
     modelo_1, modelo_2 = st.columns(2)
     with modelo_1:
-        exibir_resposta_modelo("Modelo 1", res.get("modelo_1", {}))
+        exibir_resposta_modelo("Modelo A", res.get("modelo_1", {}))
     with modelo_2:
-        exibir_resposta_modelo("Modelo 2", res.get("modelo_2", {}))
+        exibir_resposta_modelo("Modelo B", res.get("modelo_2", {}))
 
     st.info(f"Status da comparação: {res.get('status_comparacao', 'não informado')}")
 
     if res.get("decisao_modelo_3"):
-        st.markdown("**Modelo 3 (árbitro)**")
+        st.markdown("**Modelo C (juiz)**")
         st.write(f"Decisão: {res.get('decisao_modelo_3')}")
         if res.get("justificativa_escolhida_modelo_3"):
             st.write(
@@ -749,7 +844,7 @@ st.markdown(
 )
 
 st.title("Análise Avançada de Projetos")
-st.write("Auditoria inteligente baseada nos critérios técnicos da NBR e Manuais Internos.")
+st.write("Auditoria inteligente baseada no JSON normativo carregado pelo usuário.")
 
 api_key_env = get_openrouter_api_key()
 
@@ -799,24 +894,35 @@ with st.sidebar:
         st.caption("Não foi possível identificar modelos com visão; exibindo a lista completa.")
 
     model_1_choice = selecionar_modelo(
-        "Modelo 1",
+        "Modelo A",
         modelos_para_analise,
         DEFAULT_MODEL_1,
         "Modelo inicial que analisa a imagem/PDF convertido.",
+        permitir_modelo_externo=True,
     )
     model_2_choice = selecionar_modelo(
-        "Modelo 2",
+        "Modelo B",
         modelos_para_analise,
         DEFAULT_MODEL_2,
         "Segundo modelo inicial que analisa a mesma imagem/PDF convertido.",
+        permitir_modelo_externo=True,
     )
     model_3_choice = selecionar_modelo(
-        "Modelo 3 (árbitro)",
+        "Modelo C (juiz)",
         modelos_disponiveis,
         DEFAULT_MODEL_3,
         "Modelo chamado apenas em divergência; recebe só respostas e justificativas.",
+        permitir_modelo_externo=True,
     )
-    st.caption("O Modelo 3 só é chamado quando Modelo 1 e Modelo 2 divergem.")
+    for label, modelo in (
+        ("Modelo A", model_1_choice),
+        ("Modelo B", model_2_choice),
+        ("Modelo C", model_3_choice),
+    ):
+        if modelos_openrouter and modelo not in modelos_openrouter:
+            st.warning(f"{label} não apareceu no catálogo atual do OpenRouter. Se a chamada falhar, selecione outro modelo.")
+
+    st.caption("O Modelo C só é chamado quando Modelo A e Modelo B divergem.")
 
 
 if not api_key:
@@ -829,6 +935,24 @@ else:
         "Arraste a prancha do projeto (.jpeg, .png, .pdf)",
         type=["jpg", "jpeg", "png", "pdf"],
         key=f"uploader_{st.session_state.uploader_key}",
+    )
+
+    uploaded_json = st.file_uploader(
+        "Envie o JSON de requisitos normativos",
+        type=["json"],
+        key=f"json_{st.session_state.uploader_key}",
+    )
+    json_normativo, requisitos_normativos, erro_json = carregar_json_enviado(uploaded_json)
+
+    if erro_json:
+        st.warning(erro_json)
+    else:
+        exibir_previa_json(requisitos_normativos)
+
+    contexto_normativo = (
+        json.dumps(json_normativo, ensure_ascii=False, indent=2)
+        if json_normativo is not None
+        else ""
     )
 
     if uploaded_file is not None and st.session_state.analysis_results is None:
@@ -853,24 +977,27 @@ else:
         if image is not None:
             st.image(image, caption="Projeto Carregado", use_column_width=True)
 
-            if st.button(":rocket: Executar Análise com IA", type="primary"):
+            analise_bloqueada = requisitos_normativos is None
+            if st.button(
+                ":rocket: Executar Análise com IA",
+                type="primary",
+                disabled=analise_bloqueada,
+            ):
                 try:
                     with st.spinner(
-                        "Modelos 1 e 2 estão auditando os requisitos técnicos..."
+                        "Modelos A e B estão auditando os requisitos técnicos..."
                     ):
-                        data = load_requirements()
-
-                        if data:
-                            st.session_state.analysis_results = executar_fluxo_validacao(
-                                image=image,
-                                requisitos=data["requisitos"],
-                                api_key=api_key,
-                                modelo_1=model_1_choice.strip(),
-                                modelo_2=model_2_choice.strip(),
-                                modelo_3=model_3_choice.strip(),
-                                temperature=temp_input,
-                            )
-                            st.rerun()
+                        st.session_state.analysis_results = executar_fluxo_validacao(
+                            image=image,
+                            contexto_normativo=contexto_normativo,
+                            requisitos=requisitos_normativos,
+                            api_key=api_key,
+                            modelo_1=model_1_choice.strip(),
+                            modelo_2=model_2_choice.strip(),
+                            modelo_3=model_3_choice.strip(),
+                            temperature=temp_input,
+                        )
+                        st.rerun()
 
                 except OpenRouterError as e:
                     st.error(f"Falha na API OpenRouter: {e}")
