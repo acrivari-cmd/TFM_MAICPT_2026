@@ -23,9 +23,9 @@ Se preferir deixar a chave configurada localmente, crie um arquivo `.env` com ba
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-sua-chave-aqui
-OPENROUTER_MODEL_1=google/gemini-2.0-flash-001
-OPENROUTER_MODEL_2=openai/gpt-4o-mini
-OPENROUTER_MODEL_3=anthropic/claude-3.5-haiku
+OPENROUTER_MODEL_1=openai/gpt-4.1-mini
+OPENROUTER_MODEL_2=meta-llama/llama-4-maverick
+OPENROUTER_MODEL_3=openai/gpt-4.1-nano
 OPENROUTER_TIMEOUT=90
 ```
 
