@@ -1,77 +1,100 @@
 # ZIGURAT M7-T1 - Validação com OpenRouter
 
-Protótipo acadêmico em Python/Streamlit para analisar pranchas de projeto com múltiplos modelos de IA via OpenRouter.
+Protótipo acadêmico em Python/Streamlit para auditoria técnica de documentos, desenhos e projetos a partir de PDF ou imagem. A análise usa modelos multimodais via OpenRouter e um JSON normativo enviado pelo usuário.
 
 ## O que foi implementado
 
-- Integração com API OpenRouter por variável de ambiente.
-- Análise inicial do mesmo documento com Modelo 1 e Modelo 2.
-- Comparação dos resultados por requisito normativo.
-- Chamada do Modelo 3 somente quando Modelo 1 e Modelo 2 divergem.
-- Modelo 3 atuando apenas como árbitro textual, recebendo requisito, resposta e justificativa dos dois primeiros modelos.
-- Resultado final consolidado com indicação de concordância, divergência ou revisão humana necessária.
-- Interface Streamlit mostrando respostas, justificativas, decisão do árbitro quando aplicável e resultado final.
-- Campo seguro na barra lateral para informar a chave OpenRouter na sessão atual.
-- Listas suspensas carregadas a partir do catálogo de modelos disponíveis no OpenRouter.
-- Tratamento básico para ausência de chave, falhas de API, timeout, resposta vazia e JSON fora do formato esperado.
+- Modelos A, B e C pré-configurados com uma composição econômica.
+- Seletores editáveis para trocar os modelos manualmente pela interface.
+- Upload obrigatório de JSON normativo antes da análise.
+- Validação básica do JSON enviado: formato, conteúdo vazio e estrutura mínima.
+- Prompt de auditoria genérico, sem norma fixa e sem quantidade fixa de requisitos.
+- Fluxo de comparação entre Modelo A e Modelo B.
+- Modelo C chamado apenas quando houver divergência entre A e B.
+- Modelo C atua como juiz de consistência, sem reavaliar a imagem do zero.
+
+## Modelos padrão
+
+- Modelo A: `openai/gpt-5-mini`
+- Modelo B: `google/gemini-2.5-flash`
+- Modelo C: `anthropic/claude-haiku-4.5`
+
+Se algum ID não estiver disponível na conta ou no catálogo atual do OpenRouter, selecione outro modelo diretamente na barra lateral.
 
 ## Variáveis de ambiente
 
-Você pode informar a chave diretamente na barra lateral do Streamlit, no campo `Chave API OpenRouter`.
-
-Se preferir deixar a chave configurada localmente, crie um arquivo `.env` com base em `.env.example`:
+Crie um arquivo `.env` local com:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-sua-chave-aqui
-OPENROUTER_MODEL_1=openai/gpt-4.1-mini
-OPENROUTER_MODEL_2=meta-llama/llama-4-maverick
-OPENROUTER_MODEL_3=openai/gpt-4.1-nano
+OPENROUTER_MODEL_1=openai/gpt-5-mini
+OPENROUTER_MODEL_2=google/gemini-2.5-flash
+OPENROUTER_MODEL_3=anthropic/claude-haiku-4.5
 OPENROUTER_TIMEOUT=90
 ```
 
-`OPENROUTER_HTTP_REFERER` é opcional e pode ser usado para identificar a aplicação no OpenRouter.
+A chave também pode ser informada na interface da aplicação, no campo protegido da barra lateral.
 
 ## Como rodar localmente
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run M7-T1.py
 ```
 
-No Linux/macOS, use `source .venv/bin/activate` no lugar do comando de ativação do Windows.
+Para PDFs, o pacote `pdf2image` pode exigir Poppler instalado no sistema.
+
+## Estrutura mínima do JSON normativo
+
+O arquivo pode ser uma lista de requisitos:
+
+```json
+[
+  {
+    "id": "R01",
+    "requisito": "Identificação do projeto",
+    "descricao": "A prancha deve apresentar identificação clara do projeto."
+  }
+]
+```
+
+Ou um objeto com a chave `requisitos`:
+
+```json
+{
+  "norma": "Exemplo acadêmico",
+  "requisitos": [
+    {
+      "id": "R01",
+      "requisito": "Identificação do projeto",
+      "descricao": "A prancha deve apresentar identificação clara do projeto."
+    }
+  ]
+}
+```
+
+A estrutura enviada não é transformada; ela é usada como contexto normativo do prompt.
 
 ## Como testar o fluxo
 
-1. Informe a chave no campo `Chave API OpenRouter` ou configure `OPENROUTER_API_KEY` no arquivo `.env`.
-2. Escolha os modelos nas listas suspensas carregadas do OpenRouter.
-3. Rode `streamlit run M7-T1.py`.
-4. Faça upload de uma imagem ou PDF de prancha técnica.
-5. Clique em `Executar Análise com IA`.
-6. Verifique, em cada requisito, as respostas dos Modelos 1 e 2.
-7. Confirme que o Modelo 3 só aparece em itens com divergência ou necessidade de revisão.
-8. Baixe o PDF e confira o resultado final consolidado.
+1. Abrir a aplicação com `streamlit run M7-T1.py`.
+2. Informar a chave OpenRouter na interface ou configurar `OPENROUTER_API_KEY` no `.env`.
+3. Confirmar que os modelos A, B e C aparecem preenchidos.
+4. Enviar um PDF, JPG ou PNG do documento/projeto.
+5. Enviar um JSON normativo válido.
+6. Executar a análise.
+7. Conferir o resultado do Modelo A, Modelo B, comparação, decisão do Modelo C quando houver divergência e resultado final consolidado.
 
 ## Arquivos alterados
 
-- `M7-T1.py`: fluxo OpenRouter com dois modelos iniciais, árbitro sob demanda, chave via sidebar e listas suspensas de modelos.
-- `requirements.txt`: troca da dependência Gemini por `requests` e `python-dotenv`.
-- `.env.example`: variáveis esperadas para OpenRouter.
-- `README.md`: documentação curta de uso e teste.
+- `M7-T1.py`
+- `.env.example`
+- `README.md`
 
 ## Limitações conhecidas
 
-- A análise usa apenas a primeira página de PDFs, mantendo o comportamento anterior.
-- Os Modelos 1 e 2 precisam aceitar entrada visual para analisar imagem/PDF convertido.
-- O Modelo 3 não recebe a imagem nem o PDF, apenas as respostas textuais dos dois primeiros modelos.
-- A consolidação depende de respostas em JSON no formato solicitado.
-- Se a lista online de modelos do OpenRouter não carregar, a aplicação usa uma lista padrão de fallback.
-- Divergências por justificativa com o mesmo status ainda são tratadas como concordância de resultado.
-
-## Pontos de atenção para apresentação acadêmica
-
-- Explique que o Modelo 3 foi desenhado como árbitro, não como terceiro avaliador completo.
-- Destaque a economia de chamadas: o árbitro só é acionado quando há discordância.
-- Mostre um requisito com concordância e outro com divergência para evidenciar o fluxo.
-- Reforce que casos incertos são marcados para revisão humana, preservando rastreabilidade.
+- A disponibilidade dos modelos depende do catálogo e permissões da conta OpenRouter.
+- O sistema valida apenas uma estrutura mínima do JSON normativo.
+- A comparação automática depende da qualidade e consistência do JSON retornado pelos modelos.
+- O Modelo C só compara respostas e justificativas dos modelos A e B; ele não recebe a imagem.
+- A auditoria não substitui revisão técnica humana.
