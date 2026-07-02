@@ -16,6 +16,7 @@ from PIL import Image
 load_dotenv()
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 OPENROUTER_APP_TITLE = "ZIGURAT-M7-T1"
 
 
@@ -30,6 +31,19 @@ DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", "google/gemini-2.0-flash-001")
 DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", "openai/gpt-4o-mini")
 DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", "anthropic/claude-3.5-haiku")
 DEFAULT_TIMEOUT = ler_timeout_padrao()
+FALLBACK_OPENROUTER_MODELS = list(
+    dict.fromkeys(
+        [
+            DEFAULT_MODEL_1,
+            DEFAULT_MODEL_2,
+            DEFAULT_MODEL_3,
+            "openai/gpt-4o",
+            "anthropic/claude-3.5-sonnet",
+            "google/gemini-pro-1.5",
+        ]
+    )
+)
+FALLBACK_VISION_MODELS = list(dict.fromkeys([DEFAULT_MODEL_1, DEFAULT_MODEL_2]))
 
 STATUS_VALIDOS = [
     "Atendido",
@@ -56,6 +70,66 @@ class OpenRouterError(Exception):
 
 def get_openrouter_api_key():
     return os.getenv("OPENROUTER_API_KEY", "").strip()
+
+
+def modelo_parece_aceitar_imagem(modelo):
+    dados_modelo = json.dumps(modelo, ensure_ascii=False).lower()
+    termos_visao = ["image", "vision", "multimodal", "visual"]
+    return any(termo in dados_modelo for termo in termos_visao)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def carregar_modelos_openrouter():
+    try:
+        response = requests.get(OPENROUTER_MODELS_URL, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+    except requests.Timeout:
+        return [], [], "Timeout ao carregar modelos do OpenRouter."
+    except requests.RequestException as exc:
+        return [], [], f"Não foi possível carregar modelos do OpenRouter: {exc}"
+    except ValueError:
+        return [], [], "A lista de modelos do OpenRouter não retornou JSON válido."
+
+    modelos = []
+    modelos_com_visao = []
+
+    for modelo in data.get("data", []):
+        model_id = modelo.get("id")
+        if not model_id:
+            continue
+
+        modelos.append(model_id)
+        if modelo_parece_aceitar_imagem(modelo):
+            modelos_com_visao.append(model_id)
+
+    modelos = sorted(set(modelos))
+    modelos_com_visao = sorted(set(modelos_com_visao))
+
+    if not modelos:
+        return [], [], "A API do OpenRouter não retornou modelos disponíveis."
+
+    return modelos, modelos_com_visao, None
+
+
+def preparar_opcoes_modelo(modelos_disponiveis, modelo_padrao):
+    opcoes = list(modelos_disponiveis)
+    if modelo_padrao and modelo_padrao not in opcoes:
+        opcoes.insert(0, modelo_padrao)
+    if not opcoes:
+        opcoes = [modelo_padrao]
+    return opcoes
+
+
+def selecionar_modelo(label, modelos_disponiveis, modelo_padrao, help_text):
+    opcoes = preparar_opcoes_modelo(modelos_disponiveis, modelo_padrao)
+    indice_padrao = opcoes.index(modelo_padrao) if modelo_padrao in opcoes else 0
+    return st.selectbox(
+        label,
+        options=opcoes,
+        index=indice_padrao,
+        help=help_text,
+    )
 
 
 def load_requirements():
@@ -665,15 +739,28 @@ st.markdown(
 st.title("Análise Avançada de Projetos")
 st.write("Auditoria inteligente baseada nos critérios técnicos da NBR e Manuais Internos.")
 
-api_key = get_openrouter_api_key()
+api_key_env = get_openrouter_api_key()
 
 with st.sidebar:
     st.header(":gear: Configurações do Sistema")
 
-    if api_key:
+    api_key_input = st.text_input(
+        "Chave API OpenRouter",
+        type="password",
+        placeholder="sk-or-v1-...",
+        help=(
+            "Cole a chave aqui para usar nesta sessão. "
+            "Se preferir, configure OPENROUTER_API_KEY no arquivo .env."
+        ),
+    )
+    api_key = api_key_input.strip() or api_key_env
+
+    if api_key_input.strip():
+        st.success("Chave OpenRouter informada para esta sessão.")
+    elif api_key_env:
         st.success("Chave OpenRouter carregada do ambiente.")
     else:
-        st.error("Configure OPENROUTER_API_KEY no ambiente.")
+        st.error("Informe a chave acima ou configure OPENROUTER_API_KEY no ambiente.")
 
     temp_input = st.slider(
         "Criatividade da IA (Temperature)",
@@ -684,15 +771,45 @@ with st.sidebar:
         help="Para auditoria técnica, mantenha valores próximos a 0.0.",
     )
 
-    model_1_choice = st.text_input("Modelo 1", value=DEFAULT_MODEL_1)
-    model_2_choice = st.text_input("Modelo 2", value=DEFAULT_MODEL_2)
-    model_3_choice = st.text_input("Modelo 3 (árbitro)", value=DEFAULT_MODEL_3)
+    if st.button("Atualizar lista de modelos", use_container_width=True):
+        carregar_modelos_openrouter.clear()
+
+    modelos_openrouter, modelos_visao, erro_modelos = carregar_modelos_openrouter()
+    modelos_disponiveis = modelos_openrouter or FALLBACK_OPENROUTER_MODELS
+    modelos_para_analise = modelos_visao or modelos_disponiveis or FALLBACK_VISION_MODELS
+
+    if erro_modelos:
+        st.warning(f"{erro_modelos} Usando modelos padrão.")
+    else:
+        st.caption(f"{len(modelos_openrouter)} modelos carregados do OpenRouter.")
+
+    if modelos_openrouter and not modelos_visao:
+        st.caption("Não foi possível identificar modelos com visão; exibindo a lista completa.")
+
+    model_1_choice = selecionar_modelo(
+        "Modelo 1",
+        modelos_para_analise,
+        DEFAULT_MODEL_1,
+        "Modelo inicial que analisa a imagem/PDF convertido.",
+    )
+    model_2_choice = selecionar_modelo(
+        "Modelo 2",
+        modelos_para_analise,
+        DEFAULT_MODEL_2,
+        "Segundo modelo inicial que analisa a mesma imagem/PDF convertido.",
+    )
+    model_3_choice = selecionar_modelo(
+        "Modelo 3 (árbitro)",
+        modelos_disponiveis,
+        DEFAULT_MODEL_3,
+        "Modelo chamado apenas em divergência; recebe só respostas e justificativas.",
+    )
     st.caption("O Modelo 3 só é chamado quando Modelo 1 e Modelo 2 divergem.")
 
 
 if not api_key:
     st.warning(
-        ":point_left: Configure a variável OPENROUTER_API_KEY para iniciar a aplicação."
+        ":point_left: Informe a Chave API OpenRouter na barra lateral para iniciar a aplicação."
     )
 
 else:
