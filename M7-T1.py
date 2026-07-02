@@ -17,10 +17,19 @@ load_dotenv()
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_APP_TITLE = "ZIGURAT-M7-T1"
+
+
+def ler_timeout_padrao():
+    try:
+        return int(os.getenv("OPENROUTER_TIMEOUT", "90"))
+    except ValueError:
+        return 90
+
+
 DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", "google/gemini-2.0-flash-001")
 DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", "openai/gpt-4o-mini")
 DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", "anthropic/claude-3.5-haiku")
-DEFAULT_TIMEOUT = int(os.getenv("OPENROUTER_TIMEOUT", "90"))
+DEFAULT_TIMEOUT = ler_timeout_padrao()
 
 STATUS_VALIDOS = [
     "Atendido",
