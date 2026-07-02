@@ -18,6 +18,17 @@ load_dotenv()
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 OPENROUTER_APP_TITLE = "ZIGURAT-M7-T1"
+FALLBACK_VISION_MODELS = [
+    "openai/gpt-4.1-mini",
+    "meta-llama/llama-4-maverick",
+    "mistralai/mistral-small-3.1-24b-instruct",
+    "google/gemma-3-27b-it",
+]
+FALLBACK_TEXT_MODELS = [
+    "openai/gpt-4.1-nano",
+    "deepseek/deepseek-chat-v3-0324",
+    "qwen/qwen3-14b",
+]
 
 
 def ler_timeout_padrao():
@@ -27,23 +38,13 @@ def ler_timeout_padrao():
         return 90
 
 
-DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", "google/gemini-2.0-flash-001")
-DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", "openai/gpt-4o-mini")
-DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", "anthropic/claude-3.5-haiku")
+DEFAULT_MODEL_1 = os.getenv("OPENROUTER_MODEL_1", FALLBACK_VISION_MODELS[0])
+DEFAULT_MODEL_2 = os.getenv("OPENROUTER_MODEL_2", FALLBACK_VISION_MODELS[1])
+DEFAULT_MODEL_3 = os.getenv("OPENROUTER_MODEL_3", FALLBACK_TEXT_MODELS[0])
 DEFAULT_TIMEOUT = ler_timeout_padrao()
 FALLBACK_OPENROUTER_MODELS = list(
-    dict.fromkeys(
-        [
-            DEFAULT_MODEL_1,
-            DEFAULT_MODEL_2,
-            DEFAULT_MODEL_3,
-            "openai/gpt-4o",
-            "anthropic/claude-3.5-sonnet",
-            "google/gemini-pro-1.5",
-        ]
-    )
+    dict.fromkeys(FALLBACK_VISION_MODELS + FALLBACK_TEXT_MODELS)
 )
-FALLBACK_VISION_MODELS = list(dict.fromkeys([DEFAULT_MODEL_1, DEFAULT_MODEL_2]))
 
 STATUS_VALIDOS = [
     "Atendido",
@@ -73,9 +74,10 @@ def get_openrouter_api_key():
 
 
 def modelo_parece_aceitar_imagem(modelo):
-    dados_modelo = json.dumps(modelo, ensure_ascii=False).lower()
-    termos_visao = ["image", "vision", "multimodal", "visual"]
-    return any(termo in dados_modelo for termo in termos_visao)
+    arquitetura = modelo.get("architecture") or {}
+    entradas = arquitetura.get("input_modalities") or []
+    saidas = arquitetura.get("output_modalities") or []
+    return "image" in entradas and "text" in saidas
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -112,17 +114,27 @@ def carregar_modelos_openrouter():
     return modelos, modelos_com_visao, None
 
 
-def preparar_opcoes_modelo(modelos_disponiveis, modelo_padrao):
-    opcoes = list(modelos_disponiveis)
-    if modelo_padrao and modelo_padrao not in opcoes:
+def preparar_opcoes_modelo(modelos_disponiveis, modelo_padrao, permitir_modelo_externo=False):
+    opcoes = list(dict.fromkeys(modelos_disponiveis))
+    if permitir_modelo_externo and modelo_padrao and modelo_padrao not in opcoes:
         opcoes.insert(0, modelo_padrao)
     if not opcoes:
         opcoes = [modelo_padrao]
     return opcoes
 
 
-def selecionar_modelo(label, modelos_disponiveis, modelo_padrao, help_text):
-    opcoes = preparar_opcoes_modelo(modelos_disponiveis, modelo_padrao)
+def selecionar_modelo(
+    label,
+    modelos_disponiveis,
+    modelo_padrao,
+    help_text,
+    permitir_modelo_externo=False,
+):
+    opcoes = preparar_opcoes_modelo(
+        modelos_disponiveis,
+        modelo_padrao,
+        permitir_modelo_externo=permitir_modelo_externo,
+    )
     indice_padrao = opcoes.index(modelo_padrao) if modelo_padrao in opcoes else 0
     return st.selectbox(
         label,
